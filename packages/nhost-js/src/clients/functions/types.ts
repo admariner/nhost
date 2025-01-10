@@ -1,4 +1,3 @@
-import type { AxiosResponse } from 'axios'
 import { ErrorPayload } from '../../utils/types'
 
 export interface NhostFunctionsConstructorParams {
@@ -12,10 +11,10 @@ export interface NhostFunctionsConstructorParams {
   adminSecret?: string
 }
 
-export type NhostFunctionCallResponse<T = unknown> =
+export type NhostFunctionCallResponse<TData = unknown, TErrorMessage = any> =
   | {
       res: {
-        data: T
+        data: TData
         status: number
         statusText: string
       }
@@ -23,18 +22,7 @@ export type NhostFunctionCallResponse<T = unknown> =
     }
   | {
       res: null
-      error: ErrorPayload
-    }
-
-/**@deprecated */
-export type DeprecatedNhostFunctionCallResponse<T = unknown> =
-  | {
-      res: AxiosResponse<T>
-      error: null
-    }
-  | {
-      res: null
-      error: Error
+      error: ErrorPayload<TErrorMessage>
     }
 
 /** Subset of RequestInit parameters that are supported by the functions client */

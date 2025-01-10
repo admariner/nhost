@@ -1,9 +1,9 @@
-import type { FormControlProps } from '@/ui/v2/FormControl';
-import FormControl from '@/ui/v2/FormControl';
-import PopperUnstyled from '@mui/base/PopperUnstyled';
-import type { SelectUnstyledProps } from '@mui/base/SelectUnstyled';
-import SelectUnstyled from '@mui/base/SelectUnstyled';
-import { styled } from '@mui/material';
+import type { FormControlProps } from '@/components/ui/v2/FormControl';
+import { FormControl } from '@/components/ui/v2/FormControl';
+import { Popper as BasePopper } from '@mui/base/Popper';
+import type { SelectProps as BaseSelectProps } from '@mui/base/Select';
+import { Select as BaseSelect } from '@mui/base/Select';
+import { styled } from '@mui/system';
 import clsx from 'clsx';
 import type { ForwardedRef, PropsWithoutRef } from 'react';
 import { forwardRef } from 'react';
@@ -11,7 +11,7 @@ import type { ToggleButtonProps } from './ToggleButton';
 import ToggleButton from './ToggleButton';
 
 export interface SelectProps<TValue extends {}>
-  extends SelectUnstyledProps<TValue>,
+  extends BaseSelectProps<TValue, false>,
     Pick<
       FormControlProps,
       | 'fullWidth'
@@ -25,7 +25,7 @@ export interface SelectProps<TValue extends {}>
   /**
    * Props for component slots.
    */
-  slotProps?: SelectUnstyledProps<TValue>['slotProps'] & {
+  slotProps?: BaseSelectProps<TValue, false>['slotProps'] & {
     root?: Partial<PropsWithoutRef<ToggleButtonProps>>;
     label?: Partial<FormControlProps['labelProps']>;
     formControl?: Partial<FormControlProps>;
@@ -53,14 +53,14 @@ const StyledListbox = styled('ul')(({ theme }) => ({
       ? `1px solid ${theme.palette.grey[300]}`
       : 'none',
   borderWidth: theme.palette.mode === 'dark' ? 1 : 0,
-  borderColor: theme.palette.mode === 'dark' ? 'grey.400' : 'none',
+  borderColor: theme.palette.mode === 'dark' ? theme.palette.grey[400] : 'none',
   '&:focus': {
     outline: 'none',
   },
 }));
 
-const StyledPopper = styled(PopperUnstyled)`
-  z-index: 10;
+const StyledPopper = styled(BasePopper)`
+  z-index: 9999;
 `;
 
 function Select<TValue>(
@@ -80,7 +80,7 @@ function Select<TValue>(
   }: SelectProps<TValue>,
   ref: ForwardedRef<HTMLButtonElement>,
 ) {
-  const slots: SelectUnstyledProps<TValue>['slots'] = {
+  const slots: BaseSelectProps<TValue, false>['slots'] = {
     root: ToggleButton,
     popper: StyledPopper,
     listbox: StyledListbox,
@@ -107,7 +107,7 @@ function Select<TValue>(
         htmlFor: props.id,
       }}
     >
-      <SelectUnstyled
+      <BaseSelect
         aria-label={typeof label === 'string' ? label : undefined}
         {...props}
         className={clsx(error && 'error')}
@@ -117,7 +117,6 @@ function Select<TValue>(
           ...slotProps,
           root: {
             ...slotProps?.root,
-            placeholder,
           },
           listbox: {
             ...slotProps?.listbox,
@@ -132,7 +131,7 @@ function Select<TValue>(
         placeholder={placeholder}
       >
         {children}
-      </SelectUnstyled>
+      </BaseSelect>
     </FormControl>
   );
 }

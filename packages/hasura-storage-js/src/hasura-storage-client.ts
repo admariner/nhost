@@ -1,5 +1,3 @@
-import FormData from 'form-data'
-
 import { HasuraStorageApi } from './hasura-storage-api'
 import {
   appendImageTransformationParameters,
@@ -9,9 +7,13 @@ import {
   StorageGetPresignedUrlResponse,
   StorageGetUrlParams,
   StorageUploadFileParams,
+  StorageUploadFileResponse,
   StorageUploadFormDataParams,
+  StorageUploadFormDataResponse,
   StorageUploadParams,
-  StorageUploadResponse
+  StorageUploadResponse,
+  StorageDownloadFileParams,
+  StorageDownloadFileResponse
 } from './utils'
 
 export interface NhostStorageConstructorParams {
@@ -74,38 +76,14 @@ export class HasuraStorageClient {
    * @docs https://docs.nhost.io/reference/javascript/storage/upload
    */
 
-  async upload(params: StorageUploadFileParams): Promise<StorageUploadResponse>
-  async upload(params: StorageUploadFormDataParams): Promise<StorageUploadResponse>
+  async upload(params: StorageUploadFileParams): Promise<StorageUploadFileResponse>
+  async upload(params: StorageUploadFormDataParams): Promise<StorageUploadFormDataResponse>
   async upload(params: StorageUploadParams): Promise<StorageUploadResponse> {
-    let formData: FormData
-
     if ('file' in params) {
-      formData = new FormData()
-      formData.append('file', params.file)
-    } else {
-      formData = params.formData
+      return this.api.uploadFile(params)
     }
 
-    const { fileMetadata, error } = await this.api.upload({
-      ...params,
-      formData: formData
-    })
-    if (error) {
-      return { fileMetadata: null, error }
-    }
-
-    if (!fileMetadata) {
-      return { fileMetadata: null, error: new Error('Invalid file returned') }
-    }
-
-    return { fileMetadata, error: null }
-  }
-
-  /**
-   * @deprecated Use `nhost.storage.getPublicUrl()` instead.
-   */
-  getUrl(params: StorageGetUrlParams): string {
-    return this.getPublicUrl(params)
+    return this.api.uploadFormData(params)
   }
 
   /**
@@ -146,7 +124,9 @@ export class HasuraStorageClient {
   async getPresignedUrl(
     params: StorageGetPresignedUrlParams
   ): Promise<StorageGetPresignedUrlResponse> {
+    const { fileId, headers, ...imageTransformationParams } = params
     const { presignedUrl, error } = await this.api.getPresignedUrl(params)
+
     if (error) {
       return { presignedUrl: null, error }
     }
@@ -155,7 +135,45 @@ export class HasuraStorageClient {
       return { presignedUrl: null, error: new Error('Invalid file id') }
     }
 
-    return { presignedUrl, error: null }
+    const urlWithTransformationParams = appendImageTransformationParameters(
+      presignedUrl.url,
+      imageTransformationParams
+    )
+
+    return {
+      presignedUrl: {
+        ...presignedUrl,
+        url: urlWithTransformationParams
+      },
+      error: null
+    }
+  }
+
+  /**
+   * Use `nhost.storage.download` to download a file. To download a file the user must have permission to select the file in the `storage.files` table.
+   *
+   * @example
+   * ```ts
+   * const { file, error} = await nhost.storage.download({ fileId: '<File-ID>' })
+   * ```
+   *
+   * @docs https://docs.nhost.io/reference/javascript/storage/download
+   */
+  async download(params: StorageDownloadFileParams): Promise<StorageDownloadFileResponse> {
+    const { file, error } = await this.api.downloadFile(params)
+
+    if (error) {
+      return { file: null, error }
+    }
+
+    if (!file) {
+      return { file: null, error: new Error('File does not exist') }
+    }
+
+    return {
+      file,
+      error: null
+    }
   }
 
   /**
@@ -210,6 +228,57 @@ export class HasuraStorageClient {
   setAdminSecret(adminSecret?: string): HasuraStorageClient {
     this.api.setAdminSecret(adminSecret)
 
+    return this
+  }
+
+  /**
+   * Use `nhost.storage.getHeaders` to get global headers sent with all storage requests.
+   *
+   * @example
+   * ```ts
+   * nhost.storage.getHeaders()
+   * ```
+   *
+   * @docs https://docs.nhost.io/reference/javascript/storage/get-headers
+   */
+  getHeaders(): Record<string, string> {
+    return this.api.getHeaders()
+  }
+
+  /**
+   * Use `nhost.storage.setHeaders` to set global headers to be sent for all subsequent storage requests.
+   *
+   * @example
+   * ```ts
+   * nhost.storage.setHeaders({
+   *  'x-hasura-role': 'admin'
+   * })
+   * ```
+   *
+   * @param headers key value headers object
+   *
+   * @docs https://docs.nhost.io/reference/javascript/storage/set-headers
+   */
+  setHeaders(headers?: Record<string, string>): HasuraStorageClient {
+    this.api.setHeaders(headers)
+
+    return this
+  }
+
+  /**
+   * Use `nhost.storage.unsetHeaders` to remove the global headers sent for all subsequent storage requests.
+   *
+   * @example
+   * ```ts
+   * nhost.storage.unsetHeaders()
+   * ```
+   *
+   * @param headers key value headers object
+   *
+   * @docs https://docs.nhost.io/reference/javascript/storage/unset-headers
+   */
+  unsetHeaders(): HasuraStorageClient {
+    this.api.unsetHeaders()
     return this
   }
 }

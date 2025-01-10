@@ -1,13 +1,12 @@
 import { assign, createMachine, send } from 'xstate'
-
 import { INVALID_PASSWORD_ERROR } from '../errors'
 import { AuthClient } from '../internal-client'
-import { ChangePasswordResponse, ErrorPayload } from '../types'
-import { nhostApiClient } from '../utils'
+import { AuthErrorPayload, ChangePasswordResponse } from '../types'
+import { postFetch } from '../utils'
 import { isValidPassword } from '../utils/validators'
 
 export type ChangePasswordContext = {
-  error: ErrorPayload | null
+  error: AuthErrorPayload | null
 }
 export type ChangePasswordEvents =
   | {
@@ -16,7 +15,7 @@ export type ChangePasswordEvents =
       ticket?: string
     }
   | { type: 'SUCCESS' }
-  | { type: 'ERROR'; error: ErrorPayload | null }
+  | { type: 'ERROR'; error: AuthErrorPayload | null }
 
 export type ChangePasswordServices = {
   requestChange: { data: ChangePasswordResponse }
@@ -25,7 +24,6 @@ export type ChangePasswordServices = {
 export type ChangePasswordMachine = ReturnType<typeof createChangePasswordMachine>
 
 export const createChangePasswordMachine = ({ backendUrl, interpreter }: AuthClient) => {
-  const api = nhostApiClient(backendUrl)
   return createMachine(
     {
       schema: {
@@ -84,14 +82,10 @@ export const createChangePasswordMachine = ({ backendUrl, interpreter }: AuthCli
       },
       services: {
         requestChange: (_, { password, ticket }) =>
-          api.post<string, ChangePasswordResponse>(
-            '/user/password',
+          postFetch<ChangePasswordResponse>(
+            `${backendUrl}/user/password`,
             { newPassword: password, ticket: ticket },
-            {
-              headers: {
-                authorization: `Bearer ${interpreter?.getSnapshot().context.accessToken.value}`
-              }
-            }
+            interpreter?.getSnapshot().context.accessToken.value
           )
       }
     }

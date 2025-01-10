@@ -1,30 +1,76 @@
-import { LoadingScreen } from '@/components/common/LoadingScreen';
-import { Applications } from '@/components/home/Applications';
-import Sidebar from '@/components/home/Sidebar';
-import AuthenticatedLayout from '@/components/layout/AuthenticatedLayout';
-import Container from '@/components/layout/Container';
-import { useUserDataContext } from '@/context/workspace1-context';
-import { useFetchFirstWorkspace } from '@/hooks/use-setFirstWorkspace';
-import { useGetAllUserWorkspacesAndApplications } from '@/hooks/useGetAllUserWorkspacesAndApplications';
-import type { ReactElement } from 'react';
+import { AuthenticatedLayout } from '@/components/layout/AuthenticatedLayout';
+import { Container } from '@/components/layout/Container';
+import { LoadingScreen } from '@/components/presentational/LoadingScreen';
+import { MaintenanceAlert } from '@/components/presentational/MaintenanceAlert';
+import { useIsPlatform } from '@/features/orgs/projects/common/hooks/useIsPlatform';
+import { useOrgs } from '@/features/orgs/projects/hooks/useOrgs';
+import { useWorkspaces } from '@/features/orgs/projects/hooks/useWorkspaces';
+import { useSSRLocalStorage } from '@/hooks/useSSRLocalStorage';
+import { useRouter } from 'next/router';
+import { useEffect, type ReactElement } from 'react';
 
 export default function IndexPage() {
-  useFetchFirstWorkspace();
-  const { loading } = useGetAllUserWorkspacesAndApplications(false);
-  const { userContext } = useUserDataContext();
+  const { push } = useRouter();
+  const isPlatform = useIsPlatform();
+  const { orgs, loading: loadingOrgs } = useOrgs();
+  const { workspaces, loading: loadingWorkspaces } = useWorkspaces();
 
-  if (loading && userContext.workspaces.length === 0) {
-    return <LoadingScreen />;
-  }
+  const [lastSlug] = useSSRLocalStorage('slug', null);
 
-  return (
-    <Container className="flex flex-col md:flex-row">
-      <Applications />
-      <Sidebar />
-    </Container>
-  );
+  useEffect(() => {
+    const navigateToSlug = async () => {
+      if (loadingOrgs || loadingWorkspaces) {
+        return;
+      }
+
+      if (orgs && workspaces) {
+        const orgFromLastSlug = orgs.find((o) => o.slug === lastSlug);
+        const workspaceFromLastSlug = workspaces.find(
+          (w) => w.slug === lastSlug,
+        );
+
+        if (orgFromLastSlug) {
+          await push(`/orgs/${orgFromLastSlug.slug}/projects`);
+          return;
+        }
+
+        if (workspaceFromLastSlug) {
+          await push(`/${workspaceFromLastSlug.slug}`);
+          return;
+        }
+
+        const personalOrg = orgs.find((org) => org.plan.isFree);
+
+        if (personalOrg) {
+          push(`/orgs/${personalOrg.slug}/projects`);
+        }
+      }
+    };
+
+    if (isPlatform) {
+      navigateToSlug();
+    }
+  }, [
+    orgs,
+    lastSlug,
+    push,
+    workspaces,
+    loadingOrgs,
+    loadingWorkspaces,
+    isPlatform,
+  ]);
+
+  return <LoadingScreen />;
 }
 
 IndexPage.getLayout = function getLayout(page: ReactElement) {
-  return <AuthenticatedLayout title="Dashboard">{page}</AuthenticatedLayout>;
+  return (
+    <AuthenticatedLayout title="Dashboard">
+      <Container className="py-0">
+        <MaintenanceAlert />
+      </Container>
+
+      {page}
+    </AuthenticatedLayout>
+  );
 };

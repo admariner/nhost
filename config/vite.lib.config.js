@@ -1,7 +1,6 @@
 import replace from '@rollup/plugin-replace'
 import fs from 'fs'
 import path from 'path'
-
 import { defineConfig } from 'vite'
 import dts from 'vite-plugin-dts'
 import tsconfigPaths from 'vite-tsconfig-paths'
@@ -21,7 +20,9 @@ export default defineConfig({
       exclude: ['**/*.spec.ts', '**/*.test.ts', '**/tests/**'],
       entryRoot: 'src',
       // Was defaulting to true until version 1.7
-      skipDiagnostics: true
+      skipDiagnostics: true,
+      // Was defaulting to true until version 2.0
+      copyDtsFiles: true
     })
   ],
   test: {
@@ -35,6 +36,7 @@ export default defineConfig({
     }
   },
   build: {
+    target: 'es2019',
     sourcemap: true,
     lib: {
       entry,
@@ -61,7 +63,6 @@ export default defineConfig({
           '@apollo/client/utilities': '@apollo/client/utilities',
           'graphql-ws': 'graphql-ws',
           xstate: 'xstate',
-          axios: 'axios',
           'js-cookie': 'Cookies',
           react: 'React',
           'react-dom': 'ReactDOM',

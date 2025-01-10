@@ -12,26 +12,24 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - uses: pnpm/action-setup@v2.2.4
+    - uses: pnpm/action-setup@v4
       with:
-        version: 7.17.0
+        version: 9.15.0
         run_install: false
     - name: Get pnpm cache directory
       id: pnpm-cache-dir
       shell: bash
       run: echo "dir=$(pnpm store path)" >> $GITHUB_OUTPUT
-    - uses: actions/cache@v3
+    - uses: actions/cache@v4
       id: pnpm-cache
       with:
-        path: |
-          ${{ steps.pnpm-cache-dir.outputs.dir }}
-          ~/.cache/Cypress
+        path: ${{ steps.pnpm-cache-dir.outputs.dir }}
         key: ${{ runner.os }}-node-${{ hashFiles('pnpm-lock.yaml') }}
         restore-keys: ${{ runner.os }}-node-
-    - name: Use Node.js 16
+    - name: Use Node.js v20
       uses: actions/setup-node@v3
       with:
-        node-version: 16
+        node-version: 20
     - shell: bash
       name: Install packages
       run: pnpm install --frozen-lockfile
@@ -40,14 +38,14 @@ runs:
     - shell: bash
       name: Build packages
       if: ${{ inputs.BUILD == 'all' }}
-      run: pnpm build:all
+      run: pnpm run build:all
       env:
         TURBO_TOKEN: ${{ inputs.TURBO_TOKEN }}
         TURBO_TEAM: ${{ inputs.TURBO_TEAM }}
     - shell: bash
       name: Build everything in the monorepo
       if: ${{ inputs.BUILD == 'default' }}
-      run: pnpm build
+      run: pnpm run build
       env:
         TURBO_TOKEN: ${{ inputs.TURBO_TOKEN }}
         TURBO_TEAM: ${{ inputs.TURBO_TEAM }}

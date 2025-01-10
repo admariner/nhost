@@ -1,7 +1,7 @@
-import Option from '@/ui/v2/Option';
-import type { SelectProps } from '@/ui/v2/Select';
-import Select from '@/ui/v2/Select';
-import useColorPreference from '@/ui/v2/useColorPreference';
+import { Option } from '@/components/ui/v2/Option';
+import type { SelectProps } from '@/components/ui/v2/Select';
+import { Select } from '@/components/ui/v2/Select';
+import { useColorPreference } from '@/components/ui/v2/useColorPreference';
 
 export interface ThemeSwitcherProps extends SelectProps<any> {}
 
@@ -20,6 +20,14 @@ export default function ThemeSwitcher({
         setColorPreference(value as typeof colorPreference);
 
         onChange?.(event, value);
+      }}
+      slotProps={{
+        ...props?.slotProps,
+        listbox: { className: 'min-w-0 w-full' },
+        popper: {
+          disablePortal: false,
+          className: 'z-[10000] w-[270px]',
+        },
       }}
     >
       <Option value="light">Light</Option>
