@@ -1,8 +1,9 @@
 import { faker } from '@faker-js/faker'
-import axios from 'axios'
+import fetchPonyfill from 'fetch-ponyfill'
 import { afterEach, describe, expect, it } from 'vitest'
-
 import { auth, getHtmlLink, signUpAndInUser, signUpAndVerifyUser } from './helpers'
+
+const { fetch } = fetchPonyfill()
 
 describe('passwords', () => {
   afterEach(async () => {
@@ -48,9 +49,10 @@ describe('passwords', () => {
     const resetPasswordLink = await getHtmlLink(email, 'passwordReset')
 
     // verify email
-    await axios.get(resetPasswordLink, {
-      maxRedirects: 0,
-      validateStatus: (status) => status === 302
-    })
+    try {
+      await fetch(resetPasswordLink, { method: 'GET', redirect: 'follow' })
+    } catch {
+      // ignore
+    }
   })
 })

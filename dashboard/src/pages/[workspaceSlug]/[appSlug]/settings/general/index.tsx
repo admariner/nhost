@@ -1,25 +1,29 @@
-import { RemoveApplicationModal } from '@/components/applications/RemoveApplicationModal';
 import { useDialog } from '@/components/common/DialogProvider';
-import Form from '@/components/common/Form';
-import Container from '@/components/layout/Container';
-import SettingsContainer from '@/components/settings/SettingsContainer';
-import SettingsLayout from '@/components/settings/SettingsLayout';
+import { useUI } from '@/components/common/UIProvider';
+import { Form } from '@/components/form/Form';
+import { Container } from '@/components/layout/Container';
+import { SettingsContainer } from '@/components/layout/SettingsContainer';
+import { SettingsLayout } from '@/components/layout/SettingsLayout';
+import { ActivityIndicator } from '@/components/ui/v2/ActivityIndicator';
+import { Input } from '@/components/ui/v2/Input';
+import { ProjectLayout } from '@/features/orgs/layout/ProjectLayout';
+import { RemoveApplicationModal } from '@/features/projects/common/components/RemoveApplicationModal';
+import { useCurrentWorkspaceAndProject } from '@/features/projects/common/hooks/useCurrentWorkspaceAndProject';
+import { useIsCurrentUserOwner } from '@/features/projects/common/hooks/useIsCurrentUserOwner';
+import { useIsPlatform } from '@/features/projects/common/hooks/useIsPlatform';
 import {
+  GetAllWorkspacesAndProjectsDocument,
   useDeleteApplicationMutation,
-  useUpdateAppMutation,
+  usePauseApplicationMutation,
+  useUpdateApplicationMutation,
 } from '@/generated/graphql';
-import { useCurrentWorkspaceAndApplication } from '@/hooks/useCurrentWorkspaceAndApplication';
-import Input from '@/ui/v2/Input';
 import { discordAnnounce } from '@/utils/discordAnnounce';
+import { execPromiseWithErrorToast } from '@/utils/execPromiseWithErrorToast';
 import { slugifyString } from '@/utils/helpers';
-import { getToastStyleProps } from '@/utils/settings/settingsConstants';
-import { updateOwnCache } from '@/utils/updateOwnCache';
-import { useApolloClient } from '@apollo/client';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { useRouter } from 'next/router';
 import type { ReactElement } from 'react';
 import { FormProvider, useForm } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
 import * as Yup from 'yup';
 
 const projectNameValidationSchema = Yup.object({
@@ -34,21 +38,34 @@ export type ProjectNameValidationSchema = Yup.InferType<
 >;
 
 export default function SettingsGeneralPage() {
-  const { currentApplication } = useCurrentWorkspaceAndApplication();
-  const { openAlertDialog, closeAlertDialog } = useDialog();
-  const [updateApp] = useUpdateAppMutation();
-  const client = useApolloClient();
-  const [deleteApplication] = useDeleteApplicationMutation({
-    variables: { appId: currentApplication?.id },
+  const {
+    currentWorkspace,
+    currentProject,
+    loading,
+    refetch: refetchWorkspaceAndProject,
+  } = useCurrentWorkspaceAndProject();
+
+  const isOwner = useIsCurrentUserOwner();
+  const { openDialog, openAlertDialog, closeDialog } = useDialog();
+  const [updateApp] = useUpdateApplicationMutation();
+  const [pauseApplication] = usePauseApplicationMutation({
+    variables: { appId: currentProject?.id },
+    refetchQueries: [{ query: GetAllWorkspacesAndProjectsDocument }],
   });
-  const { currentWorkspace } = useCurrentWorkspaceAndApplication();
+  const [deleteApplication] = useDeleteApplicationMutation({
+    variables: { appId: currentProject?.id },
+    refetchQueries: [{ query: GetAllWorkspacesAndProjectsDocument }],
+  });
   const router = useRouter();
+  const { maintenanceActive } = useUI();
+
+  const isPlatform = useIsPlatform();
 
   const form = useForm<ProjectNameValidationSchema>({
     mode: 'onSubmit',
     reValidateMode: 'onSubmit',
     defaultValues: {
-      name: currentApplication?.name,
+      name: currentProject?.name,
     },
     resolver: yupResolver(projectNameValidationSchema),
     criteriaMode: 'all',
@@ -57,7 +74,7 @@ export default function SettingsGeneralPage() {
 
   const { register, formState } = form;
 
-  const handleProjectNameChange = async (data: ProjectNameValidationSchema) => {
+  async function handleProjectNameChange(data: ProjectNameValidationSchema) {
     // In this bit of code we spread the props of the current path (e.g. /workspace/...) and add one key-value pair: `updating: true`.
     // We want to indicate that the currently we're in the process of running a mutation state that will affect the routing behaviour of the website
     // i.e. redirecting to 404 if there's no workspace/project with that slug.
@@ -79,7 +96,7 @@ export default function SettingsGeneralPage() {
 
     const updateAppMutation = updateApp({
       variables: {
-        id: currentApplication.id,
+        appId: currentProject.id,
         app: {
           name: data.name,
           slug: newProjectSlug,
@@ -87,43 +104,66 @@ export default function SettingsGeneralPage() {
       },
     });
 
-    await toast.promise(
-      updateAppMutation,
-      {
-        loading: `Project name is being updated...`,
-        success: `Project name has been updated successfully.`,
-        error: `An error occurred while trying to update project name.`,
-      },
-      getToastStyleProps(),
-    );
     try {
-      await client.refetchQueries({
-        include: ['getOneUser'],
-      });
-      form.reset(undefined, { keepValues: true, keepDirty: false });
-      await router.push(
-        `/${currentWorkspace.slug}/${newProjectSlug}/settings/general`,
+      const { data: updateAppData } = await execPromiseWithErrorToast(
+        async () => updateAppMutation,
+        {
+          loadingMessage: `Project name is being updated...`,
+          successMessage: `Project name has been updated successfully.`,
+          errorMessage: `An error occurred while trying to update project name.`,
+        },
       );
-    } catch (error) {
-      await discordAnnounce(
-        error.message || 'Error while trying to update application cache',
-      );
-    }
-  };
 
-  const handleDeleteApplication = async () => {
-    await toast.promise(
-      deleteApplication(),
-      {
-        loading: `Deleting ${currentApplication.name}...`,
-        success: `${currentApplication.name} deleted`,
-        error: `Error while trying to ${currentApplication.name} project name`,
+      const updateAppResult = updateAppData?.updateApp;
+
+      if (!updateAppResult) {
+        await discordAnnounce('Failed to update project name.');
+
+        return;
+      }
+
+      form.reset(undefined, { keepValues: true, keepDirty: false });
+
+      await refetchWorkspaceAndProject();
+      await router.replace(
+        `/${currentWorkspace.slug}/${updateAppResult.slug}/settings/general`,
+      );
+    } catch {
+      // Note: The toast will handle the error.
+    }
+  }
+
+  async function handleDeleteApplication() {
+    await execPromiseWithErrorToast(
+      async () => {
+        await deleteApplication();
+        await router.push('/');
       },
-      getToastStyleProps(),
+      {
+        loadingMessage: `Deleting ${currentProject.name}...`,
+        successMessage: `${currentProject.name} has been deleted successfully.`,
+        errorMessage: `An error occurred while trying to delete the project "${currentProject.name}". Please try again.`,
+      },
     );
-    await router.push('/');
-    await updateOwnCache(client);
-  };
+  }
+
+  async function handlePauseApplication() {
+    await execPromiseWithErrorToast(
+      async () => {
+        await pauseApplication();
+        await router.push('/');
+      },
+      {
+        loadingMessage: `Pausing ${currentProject.name}...`,
+        successMessage: `${currentProject.name} will be paused, but please note that it may take some time to complete the process.`,
+        errorMessage: `An error occurred while trying to pause the project "${currentProject.name}". Please try again.`,
+      },
+    );
+  }
+
+  if (loading) {
+    return <ActivityIndicator label="Loading project..." />;
+  }
 
   return (
     <Container
@@ -138,7 +178,8 @@ export default function SettingsGeneralPage() {
             className="grid grid-flow-row px-4 lg:grid-cols-4"
             slotProps={{
               submitButton: {
-                disabled: !formState.isValid || !formState.isDirty,
+                disabled:
+                  !formState.isDirty || maintenanceActive || !isPlatform,
                 loading: formState.isSubmitting,
               },
             }}
@@ -159,42 +200,79 @@ export default function SettingsGeneralPage() {
         </Form>
       </FormProvider>
 
-      <SettingsContainer
-        title="Delete Project"
-        description="The project will be permanently deleted, including its database, metadata, files, etc. This action is irreversible and can not be undone."
-        submitButtonText="Delete"
-        rootClassName="border-[#F87171]"
-        primaryActionButtonProps={{
-          type: 'button',
-          color: 'error',
-          variant: 'contained',
-          onClick: () => {
-            openAlertDialog({
-              title: `Are you sure you want to remove ${currentApplication?.name}?`,
-              payload: (
-                <RemoveApplicationModal
-                  close={closeAlertDialog}
-                  handler={handleDeleteApplication}
-                  className="p-0"
-                />
-              ),
-              props: {
-                primaryButtonText: 'Delete',
-                primaryButtonColor: 'error',
-                PaperProps: { className: 'max-w-sm' },
-                fullWidth: true,
-                hideTitle: true,
-                hidePrimaryAction: true,
-                hideSecondaryAction: true,
+      {currentProject?.legacyPlan?.isFree && (
+        <SettingsContainer
+          title="Pause Project"
+          description="While your project is paused, it will not be accessible. You can wake it up anytime after."
+          submitButtonText="Pause"
+          slotProps={{
+            submitButton: {
+              type: 'button',
+              color: 'primary',
+              variant: 'contained',
+              disabled: maintenanceActive,
+              onClick: () => {
+                openAlertDialog({
+                  title: 'Pause Project?',
+                  payload:
+                    'Are you sure you want to pause this project? It will not be accessible until you unpause it.',
+                  props: {
+                    onPrimaryAction: handlePauseApplication,
+                  },
+                });
               },
-            });
-          },
-        }}
-      />
+            },
+          }}
+        />
+      )}
+
+      {isOwner && (
+        <SettingsContainer
+          title="Delete Project"
+          description="The project will be permanently deleted, including its database, metadata, files, etc. This action is irreversible and can not be undone."
+          submitButtonText="Delete"
+          slotProps={{
+            root: {
+              sx: { borderColor: (theme) => theme.palette.error.main },
+            },
+            submitButton: {
+              type: 'button',
+              color: 'error',
+              variant: 'contained',
+              disabled: maintenanceActive,
+              onClick: () => {
+                openDialog({
+                  component: (
+                    <RemoveApplicationModal
+                      close={closeDialog}
+                      handler={handleDeleteApplication}
+                    />
+                  ),
+                  props: {
+                    PaperProps: { className: 'max-w-sm' },
+                  },
+                });
+              },
+            },
+          }}
+        />
+      )}
     </Container>
   );
 }
 
 SettingsGeneralPage.getLayout = function getLayout(page: ReactElement) {
-  return <SettingsLayout>{page}</SettingsLayout>;
+  return (
+    <ProjectLayout
+      mainContainerProps={{
+        className: 'flex h-full',
+      }}
+    >
+      <SettingsLayout>
+        <Container sx={{ backgroundColor: 'background.default' }}>
+          {page}
+        </Container>
+      </SettingsLayout>
+    </ProjectLayout>
+  );
 };

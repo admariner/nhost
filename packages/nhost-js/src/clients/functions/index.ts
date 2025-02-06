@@ -1,28 +1,17 @@
-import axios, {
-  AxiosError,
-  AxiosInstance,
-  AxiosRequestConfig,
-  AxiosResponse,
-  RawAxiosRequestHeaders
-} from 'axios'
-import { urlFromSubdomain } from '../../utils/helpers'
+import fetch from 'isomorphic-unfetch'
+import { buildUrl, urlFromSubdomain } from '../../utils/helpers'
 import { NhostClientConstructorParams } from '../../utils/types'
 import {
-  DeprecatedNhostFunctionCallResponse,
   NhostFunctionCallConfig,
   NhostFunctionCallResponse,
   NhostFunctionsConstructorParams
 } from './types'
-
-export * from './types'
 /**
  * Creates a client for Functions from either a subdomain or a URL
  */
 export function createFunctionsClient(params: NhostClientConstructorParams) {
   const functionsUrl =
-    'subdomain' in params || 'backendUrl' in params
-      ? urlFromSubdomain(params, 'functions')
-      : params.functionsUrl
+    'subdomain' in params ? urlFromSubdomain(params, 'functions') : params.functionsUrl
 
   if (!functionsUrl) {
     throw new Error('Please provide `subdomain` or `functionsUrl`.')
@@ -36,9 +25,9 @@ export function createFunctionsClient(params: NhostClientConstructorParams) {
  */
 export class NhostFunctionsClient {
   readonly url: string
-  private instance: AxiosInstance
   private accessToken: string | null
   private adminSecret?: string
+  private headers: Record<string, string> = {}
 
   constructor(params: NhostFunctionsConstructorParams) {
     const { url, adminSecret } = params
@@ -46,99 +35,111 @@ export class NhostFunctionsClient {
     this.url = url
     this.accessToken = null
     this.adminSecret = adminSecret
-    this.instance = axios.create({
-      baseURL: url
-    })
   }
 
-  /** @deprecated Axios will be replaced by cross-fetch in the near future. Only the headers configuration will be kept. */
-  async call<T = unknown, D = any>(
-    url: string,
-    data?: D,
-    config?: (NhostFunctionCallConfig | AxiosRequestConfig) & { useAxios?: true }
-  ): Promise<DeprecatedNhostFunctionCallResponse<T>>
-
-  async call<T = unknown, D = any>(
-    url: string,
-    data: D,
-    config?: NhostFunctionCallConfig & { useAxios: false }
-  ): Promise<NhostFunctionCallResponse<T>>
-
   /**
-   * Use `nhost.functions.call` to call (sending a POST request to) a serverless function.
+   * Use `nhost.functions.call` to call (sending a POST request to) a serverless function. Use generic
+   * types to specify the expected response data, request body and error message.
    *
    * @example
+   * ### Without generic types
    * ```ts
    * await nhost.functions.call('send-welcome-email', { email: 'joe@example.com', name: 'Joe Doe' })
    * ```
    *
+   * @example
+   * ### Using generic types
+   * ```ts
+   * type Data = {
+   *   message: string
+   * }
+   *
+   * type Body = {
+   *   email: string
+   *   name: string
+   * }
+   *
+   * type ErrorMessage = {
+   *   details: string
+   * }
+   *
+   * // The function will only accept a body of type `Body`
+   * const { res, error } = await nhost.functions.call<Data, Body, ErrorMessage>(
+   *   'send-welcome-email',
+   *   { email: 'joe@example.com', name: 'Joe Doe' }
+   * )
+   *
+   * // Now the response data is typed as `Data`
+   * console.log(res?.data.message)
+   *
+   * // Now the error message is typed as `ErrorMessage`
+   * console.log(error?.message.details)
+   * ```
+   *
    * @docs https://docs.nhost.io/reference/javascript/nhost-js/functions/call
    */
-  async call<T = unknown, D = any>(
+  async call<TData = unknown, TBody = any, TErrorMessage = any>(
     url: string,
-    data: D,
-    {
-      useAxios = true,
-      ...config
-    }: (AxiosRequestConfig | NhostFunctionCallConfig) & { useAxios?: boolean } = {}
-  ): Promise<DeprecatedNhostFunctionCallResponse<T> | NhostFunctionCallResponse> {
-    if (useAxios) {
-      console.warn(
-        'nhost.functions.call() will no longer use Axios in the near future. Please add `useAxios: false` in the config argument to use the new implementation.'
-      )
-    }
-    const headers = {
+    body?: TBody | null,
+    config?: NhostFunctionCallConfig
+  ): Promise<NhostFunctionCallResponse<TData, TErrorMessage>> {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
       ...this.generateAccessTokenHeaders(),
-      ...config?.headers
+      ...config?.headers,
+      ...this.headers // nhost functions client headers to be sent with all calls
     }
 
-    let res
+    const fullUrl = buildUrl(this.url, url)
+
     try {
-      res = await this.instance.post<T, AxiosResponse<T>, D>(url, data, { ...config, headers })
-    } catch (error) {
-      if (error instanceof Error) {
-        if (useAxios) {
-          return { res: null, error }
+      const result = await fetch(fullUrl, {
+        body: body ? JSON.stringify(body) : null,
+        headers,
+        method: 'POST'
+      })
+
+      if (!result.ok) {
+        let message: TErrorMessage
+
+        if (result.headers.get('content-type')?.includes('application/json')) {
+          message = await result.json()
+        } else {
+          message = (await result.text()) as unknown as TErrorMessage
         }
-        const axiosError = error as AxiosError
+
         return {
           res: null,
           error: {
-            error: axiosError.code || 'unknown',
-            status: axiosError.status || 0,
-            message: axiosError.message
+            message,
+            error: result.statusText,
+            status: result.status
           }
         }
       }
-    }
 
-    if (!res) {
-      if (useAxios) {
-        return {
-          res: null,
-          error: new Error('Unable to make post request to function')
-        }
+      let data: TData
+
+      if (result.headers.get('content-type')?.includes('application/json')) {
+        data = await result.json()
+      } else {
+        data = (await result.text()) as unknown as TData
       }
+
+      return {
+        res: { data, status: result.status, statusText: result.statusText },
+        error: null
+      }
+    } catch (e) {
+      const error = e as Error
       return {
         res: null,
         error: {
-          error: 'invalid-response',
-          status: 0,
-          message: 'Unable to make post request to function'
+          message: error.message as unknown as TErrorMessage,
+          status: error.name === 'AbortError' ? 0 : 500,
+          error: error.name === 'AbortError' ? 'abort-error' : 'unknown'
         }
       }
-    }
-
-    if (useAxios) {
-      return { res, error: null }
-    }
-    return {
-      res: {
-        status: res.status,
-        statusText: res.statusText,
-        data: res.data
-      },
-      error: null
     }
   }
 
@@ -161,7 +162,61 @@ export class NhostFunctionsClient {
     this.accessToken = accessToken
   }
 
-  private generateAccessTokenHeaders(): RawAxiosRequestHeaders {
+  /**
+   * Use `nhost.functions.getHeaders` to get the global headers sent with all functions requests.
+   *
+   * @example
+   * ```ts
+   * nhost.functions.getHeaders()
+   * ```
+   *
+   * @docs https://docs.nhost.io/reference/javascript/nhost-js/functions/get-headers
+   */
+  getHeaders(): Record<string, string> {
+    return this.headers
+  }
+
+  /**
+   * Use `nhost.functions.setHeaders` to a set global headers to be sent in all subsequent functions requests.
+   *
+   * @example
+   * ```ts
+   * nhost.functions.setHeaders({
+   *  'x-hasura-role': 'admin'
+   * })
+   * ```
+   *
+   * @docs https://docs.nhost.io/reference/javascript/nhost-js/functions/set-headers
+   */
+  setHeaders(headers?: Record<string, string>) {
+    if (!headers) {
+      return
+    }
+
+    this.headers = {
+      ...this.headers,
+      ...headers
+    }
+  }
+
+  /**
+   * Use `nhost.functions.unsetHeaders` to a unset global headers sent with all functions requests.
+   *
+   * @example
+   * ```ts
+   * nhost.functions.unsetHeaders()
+   * ```
+   *
+   * @docs https://docs.nhost.io/reference/javascript/nhost-js/functions/unset-headers
+   */
+  unsetHeaders() {
+    const userRole = this.headers['x-hasura-role']
+
+    // preserve the user role header to avoid invalidating preceding 'setRole' call.
+    this.headers = userRole ? { 'x-hasura-role': userRole } : {}
+  }
+
+  generateAccessTokenHeaders(): NhostFunctionCallConfig['headers'] {
     if (this.adminSecret) {
       return {
         'x-hasura-admin-secret': this.adminSecret
