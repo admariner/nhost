@@ -1,13 +1,12 @@
 import { assign, createMachine, send } from 'xstate'
-
 import { INVALID_EMAIL_ERROR } from '../errors'
 import { AuthClient } from '../internal-client'
-import { ChangeEmailOptions, ChangeEmailResponse, ErrorPayload } from '../types'
-import { nhostApiClient, rewriteRedirectTo } from '../utils'
+import { AuthErrorPayload, ChangeEmailOptions, ChangeEmailResponse } from '../types'
+import { postFetch, rewriteRedirectTo } from '../utils'
 import { isValidEmail } from '../utils/validators'
 
 export type ChangeEmailContext = {
-  error: ErrorPayload | null
+  error: AuthErrorPayload | null
 }
 
 export type ChangeEmailEvents =
@@ -17,7 +16,7 @@ export type ChangeEmailEvents =
       options?: ChangeEmailOptions
     }
   | { type: 'SUCCESS' }
-  | { type: 'ERROR'; error: ErrorPayload | null }
+  | { type: 'ERROR'; error: AuthErrorPayload | null }
 
 export type ChangeEmailServices = {
   request: { data: ChangeEmailResponse }
@@ -26,7 +25,6 @@ export type ChangeEmailServices = {
 export type ChangeEmailMachine = ReturnType<typeof createChangeEmailMachine>
 
 export const createChangeEmailMachine = ({ backendUrl, clientUrl, interpreter }: AuthClient) => {
-  const api = nhostApiClient(backendUrl)
   return createMachine(
     {
       schema: {
@@ -86,17 +84,10 @@ export const createChangeEmailMachine = ({ backendUrl, clientUrl, interpreter }:
       },
       services: {
         requestChange: async (_, { email, options }) => {
-          const res = await api.post(
-            '/user/email/change',
-            {
-              newEmail: email,
-              options: rewriteRedirectTo(clientUrl, options)
-            },
-            {
-              headers: {
-                authorization: `Bearer ${interpreter?.getSnapshot().context.accessToken.value}`
-              }
-            }
+          const res = await postFetch(
+            `${backendUrl}/user/email/change`,
+            { newEmail: email, options: rewriteRedirectTo(clientUrl, options) },
+            interpreter?.getSnapshot().context.accessToken.value
           )
           return res.data
         }

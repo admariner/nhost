@@ -1,7 +1,0 @@
-query getDatabaseConnectionInfo($id: uuid!) {
-  app(id: $id) {
-    id
-    postgresUser
-    postgresDatabase
-  }
-}

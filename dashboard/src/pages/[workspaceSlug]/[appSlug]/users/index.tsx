@@ -1,31 +1,32 @@
 import { useDialog } from '@/components/common/DialogProvider';
-import Pagination from '@/components/common/Pagination';
-import Container from '@/components/layout/Container';
-import ProjectLayout from '@/components/layout/ProjectLayout';
-import UsersBody from '@/components/users/UsersBody';
+import { Pagination } from '@/components/common/Pagination';
+import { Container } from '@/components/layout/Container';
+import { ActivityIndicator } from '@/components/ui/v2/ActivityIndicator';
+import { Box } from '@/components/ui/v2/Box';
+import { Button } from '@/components/ui/v2/Button';
+import { PlusIcon } from '@/components/ui/v2/icons/PlusIcon';
+import { SearchIcon } from '@/components/ui/v2/icons/SearchIcon';
+import { UserIcon } from '@/components/ui/v2/icons/UserIcon';
+import { Input } from '@/components/ui/v2/Input';
+import { Text } from '@/components/ui/v2/Text';
+import { CreateUserForm } from '@/features/authentication/users/components/CreateUserForm';
+import { UsersBody } from '@/features/authentication/users/components/UsersBody';
+import { ProjectLayout } from '@/features/orgs/layout/ProjectLayout';
 import { useRemoteApplicationGQLClient } from '@/hooks/useRemoteApplicationGQLClient';
-import ActivityIndicator from '@/ui/v2/ActivityIndicator';
-import Box from '@/ui/v2/Box';
-import Button from '@/ui/v2/Button';
-import PlusIcon from '@/ui/v2/icons/PlusIcon';
-import SearchIcon from '@/ui/v2/icons/SearchIcon';
-import UserIcon from '@/ui/v2/icons/UserIcon';
-import Input from '@/ui/v2/Input';
-import Text from '@/ui/v2/Text';
-import type { RemoteAppGetUsersQuery } from '@/utils/__generated__/graphql';
-import { useRemoteAppGetUsersQuery } from '@/utils/__generated__/graphql';
+import type { RemoteAppGetUsersAndAuthRolesQuery } from '@/utils/__generated__/graphql';
+import { useRemoteAppGetUsersAndAuthRolesQuery } from '@/utils/__generated__/graphql';
 import debounce from 'lodash.debounce';
 import Router, { useRouter } from 'next/router';
 import type { ChangeEvent, ReactElement } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export type RemoteAppUser = Exclude<
-  RemoteAppGetUsersQuery['users'][0],
+  RemoteAppGetUsersAndAuthRolesQuery['users'][0],
   '__typename'
 >;
 
 export default function UsersPage() {
-  const { openDialog, closeDialog } = useDialog();
+  const { openDialog } = useDialog();
   const remoteProjectGQLClient = useRemoteApplicationGQLClient();
   const [searchString, setSearchString] = useState<string>('');
 
@@ -74,7 +75,7 @@ export default function UsersPage() {
     data: dataRemoteAppUsers,
     refetch: refetchProjectUsers,
     loading: loadingRemoteAppUsersQuery,
-  } = useRemoteAppGetUsersQuery({
+  } = useRemoteAppGetUsersAndAuthRolesQuery({
     variables: remoteAppGetUserVariables,
     client: remoteProjectGQLClient,
   });
@@ -200,14 +201,9 @@ export default function UsersPage() {
   );
 
   function openCreateUserDialog() {
-    openDialog('CREATE_USER', {
+    openDialog({
       title: 'Create User',
-      payload: {
-        onSuccess: async () => {
-          await refetchProjectUsers();
-          closeDialog();
-        },
-      },
+      component: <CreateUserForm onSubmit={refetchProjectUsers} />,
     });
   }
 
@@ -228,16 +224,16 @@ export default function UsersPage() {
   if (loadingRemoteAppUsersQuery) {
     return (
       <Container
-        className="flex flex-col max-w-9xl h-full"
+        className="flex h-full max-w-9xl flex-col"
         rootClassName="h-full"
       >
-        <div className="flex flex-row place-content-between shrink-0 grow-0">
+        <div className="flex shrink-0 grow-0 flex-row place-content-between">
           <Input
             className="rounded-sm"
             placeholder="Search users"
             startAdornment={
               <SearchIcon
-                className="w-4 h-4 ml-2 -mr-1 shrink-0"
+                className="-mr-1 ml-2 h-4 w-4 shrink-0"
                 sx={{ color: 'text.disabled' }}
               />
             }
@@ -245,14 +241,14 @@ export default function UsersPage() {
           />
           <Button
             onClick={openCreateUserDialog}
-            startIcon={<PlusIcon className="w-4 h-4" />}
+            startIcon={<PlusIcon className="h-4 w-4" />}
             size="small"
           >
             Create User
           </Button>
         </div>
 
-        <div className="overflow-hidden flex items-center justify-center flex-auto">
+        <div className="flex flex-auto items-center justify-center overflow-hidden">
           <ActivityIndicator label="Loading users..." />
         </div>
       </Container>
@@ -260,14 +256,14 @@ export default function UsersPage() {
   }
 
   return (
-    <Container className="mx-auto space-y-5 overflow-x-hidden max-w-9xl">
+    <Container className="mx-auto max-w-9xl space-y-5 overflow-x-hidden">
       <div className="flex flex-row place-content-between">
         <Input
           className="rounded-sm"
           placeholder="Search users"
           startAdornment={
             <SearchIcon
-              className="w-4 h-4 ml-2 -mr-1 shrink-0"
+              className="-mr-1 ml-2 h-4 w-4 shrink-0"
               sx={{ color: 'text.disabled' }}
             />
           }
@@ -275,21 +271,21 @@ export default function UsersPage() {
         />
         <Button
           onClick={openCreateUserDialog}
-          startIcon={<PlusIcon className="w-4 h-4" />}
+          startIcon={<PlusIcon className="h-4 w-4" />}
           size="small"
         >
           Create User
         </Button>
       </div>
       {usersCount === 0 ? (
-        <Box className="flex flex-col items-center justify-center px-48 py-12 space-y-5 border rounded-lg shadow-sm">
+        <Box className="flex flex-col items-center justify-center space-y-5 rounded-lg border px-48 py-12 shadow-sm">
           <UserIcon
             strokeWidth={1}
-            className="w-10 h-10"
+            className="h-10 w-10"
             sx={{ color: 'text.disabled' }}
           />
           <div className="flex flex-col space-y-1">
-            <Text className="font-medium text-center" variant="h3">
+            <Text className="text-center font-medium" variant="h3">
               There are no users yet
             </Text>
             <Text variant="subtitle1" className="text-center">
@@ -302,34 +298,34 @@ export default function UsersPage() {
               color="primary"
               className="w-full"
               onClick={openCreateUserDialog}
-              startIcon={<PlusIcon className="w-4 h-4" />}
+              startIcon={<PlusIcon className="h-4 w-4" />}
             >
               Create User
             </Button>
           </div>
         </Box>
       ) : (
-        <div className="grid grid-flow-row gap-2 lg:w-9xl">
-          <div className="grid w-full h-full grid-flow-row pb-4 overflow-hidden">
-            <Box className="grid w-full p-2 border-b md:grid-cols-6">
+        <div className="lg:w-9xl grid grid-flow-row gap-2">
+          <div className="grid h-full w-full grid-flow-row overflow-hidden pb-4">
+            <Box className="grid w-full border-b p-2 md:grid-cols-6">
               <Text className="font-medium md:col-span-2">Name</Text>
               <Text className="hidden font-medium md:block">Signed up at</Text>
               <Text className="hidden font-medium md:block">Last Seen</Text>
-              <Text className="hidden col-span-2 font-medium md:block">
+              <Text className="col-span-2 hidden font-medium md:block">
                 OAuth Providers
               </Text>
             </Box>
             {dataRemoteAppUsers?.filteredUsersAggreggate.aggregate.count ===
               0 &&
               usersCount !== 0 && (
-                <Box className="flex flex-col items-center justify-center px-48 py-12 space-y-5 border-b border-x">
+                <Box className="flex flex-col items-center justify-center space-y-5 border-x border-b px-48 py-12">
                   <UserIcon
                     strokeWidth={1}
-                    className="w-10 h-10"
+                    className="h-10 w-10"
                     sx={{ color: 'text.disabled' }}
                   />
                   <div className="flex flex-col space-y-1">
-                    <Text className="font-medium text-center" variant="h3">
+                    <Text className="text-center font-medium" variant="h3">
                       No results for &quot;{searchString}&quot;
                     </Text>
                     <Text variant="subtitle1" className="text-center">
@@ -340,10 +336,7 @@ export default function UsersPage() {
               )}
             {thereAreUsers && (
               <div className="grid grid-flow-row gap-4">
-                <UsersBody
-                  users={users}
-                  onSuccessfulAction={refetchProjectUsers}
-                />
+                <UsersBody users={users} onSubmit={refetchProjectUsers} />
                 <Pagination
                   className="px-2"
                   totalNrOfPages={nrOfPages}
@@ -354,6 +347,7 @@ export default function UsersPage() {
                           .count
                       : dataRemoteAppUsers?.usersAggregate?.aggregate?.count
                   }
+                  itemsLabel="users"
                   elementsPerPage={
                     searchString
                       ? dataRemoteAppUsers?.filteredUsersAggreggate.aggregate
@@ -394,9 +388,5 @@ export default function UsersPage() {
 }
 
 UsersPage.getLayout = function getLayout(page: ReactElement) {
-  return (
-    <ProjectLayout contentContainerProps={{ className: 'h-full' }}>
-      {page}
-    </ProjectLayout>
-  );
+  return <ProjectLayout>{page}</ProjectLayout>;
 };

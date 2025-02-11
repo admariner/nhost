@@ -1,13 +1,12 @@
 import { assign, createMachine, send } from 'xstate'
-
 import { INVALID_EMAIL_ERROR } from '../errors'
 import { AuthClient } from '../internal-client'
-import { ErrorPayload, ResetPasswordOptions, ResetPasswordResponse } from '../types'
-import { nhostApiClient, rewriteRedirectTo } from '../utils'
+import { AuthErrorPayload, ResetPasswordOptions, ResetPasswordResponse } from '../types'
+import { postFetch, rewriteRedirectTo } from '../utils'
 import { isValidEmail } from '../utils/validators'
 
 export type ResetPasswordContext = {
-  error: ErrorPayload | null
+  error: AuthErrorPayload | null
 }
 export type ResetPasswordEvents =
   | {
@@ -16,7 +15,7 @@ export type ResetPasswordEvents =
       options?: ResetPasswordOptions
     }
   | { type: 'SUCCESS' }
-  | { type: 'ERROR'; error: ErrorPayload | null }
+  | { type: 'ERROR'; error: AuthErrorPayload | null }
 
 export type ResetPasswordServices = {
   requestChange: { data: ResetPasswordResponse }
@@ -25,7 +24,6 @@ export type ResetPasswordServices = {
 export type ResetPasswordMachine = ReturnType<typeof createResetPasswordMachine>
 
 export const createResetPasswordMachine = ({ backendUrl, clientUrl }: AuthClient) => {
-  const api = nhostApiClient(backendUrl)
   return createMachine(
     {
       schema: {
@@ -84,7 +82,7 @@ export const createResetPasswordMachine = ({ backendUrl, clientUrl }: AuthClient
       },
       services: {
         requestChange: (_, { email, options }) =>
-          api.post<string, ResetPasswordResponse>('/user/password/reset', {
+          postFetch<ResetPasswordResponse>(`${backendUrl}/user/password/reset`, {
             email,
             options: rewriteRedirectTo(clientUrl, options)
           })
