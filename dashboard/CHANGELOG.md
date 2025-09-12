@@ -1,5 +1,17 @@
 # @nhost/dashboard
 
+## 2.36.0
+
+### Minor Changes
+
+- a30da08: feat (dashboard): add custom types to column types
+
+### Patch Changes
+
+- 397bfc9: fix (dashboard): Parse foreign key relations correctly
+- 92e71a6: fix: minor fixes to csp
+- 81716d9: fix (dashboard): Show validation error on save when editing database columns
+
 ## 2.35.0
 
 ### Minor Changes
