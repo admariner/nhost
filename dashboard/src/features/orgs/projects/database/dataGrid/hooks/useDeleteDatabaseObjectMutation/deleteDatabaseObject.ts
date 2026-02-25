@@ -7,27 +7,36 @@ import type {
 import { getPreparedHasuraQuery } from '@/features/orgs/projects/database/dataGrid/utils/hasuraQueryHelpers';
 import { normalizeQueryError } from '@/features/orgs/projects/database/dataGrid/utils/normalizeQueryError';
 
-export interface DeleteTableVariables {
+export const typeToQuery = {
+  'BASE TABLE': 'TABLE',
+} as const;
+
+export interface DeleteDatabaseObjectVariables {
   /**
-   * Schema where the table is located.
+   * Schema where the database object is located.
    */
   schema: string;
   /**
-   * Table to delete.
+   * Database object to delete.
    */
   table: string;
+  /**
+   * Type of the database object to delete.
+   */
+  type: 'BASE TABLE';
 }
 
-export interface DeleteTableOptions
+export interface DeleteDatabaseObjectOptions
   extends Omit<MutationOrQueryBaseOptions, 'schema' | 'table'> {}
 
-export default async function deleteTable({
+export default async function deleteDatabaseObject({
   dataSource,
   appUrl,
   adminSecret,
   schema,
   table,
-}: DeleteTableOptions & DeleteTableVariables) {
+  type,
+}: DeleteDatabaseObjectOptions & DeleteDatabaseObjectVariables) {
   const response = await fetch(`${appUrl}/v2/query`, {
     method: 'POST',
     headers: {
@@ -35,7 +44,12 @@ export default async function deleteTable({
     },
     body: JSON.stringify({
       args: [
-        getPreparedHasuraQuery(dataSource, 'DROP TABLE %I.%I', schema, table),
+        getPreparedHasuraQuery(
+          dataSource,
+          `DROP ${typeToQuery[type]} %I.%I`,
+          schema,
+          table,
+        ),
       ],
       type: 'bulk',
       version: 1,

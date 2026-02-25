@@ -10,31 +10,38 @@ import {
 } from '@/features/orgs/projects/database/dataGrid/utils/hasuraQueryHelpers';
 import { normalizeQueryError } from '@/features/orgs/projects/database/dataGrid/utils/normalizeQueryError';
 import { getHasuraMigrationsApiUrl } from '@/utils/env';
+import { typeToQuery } from './deleteDatabaseObject';
 
-export interface DeleteTableMigrationVariables {
+export interface DeleteDatabaseObjectMigrationVariables {
   /**
-   * Schema where the table is located.
+   * Schema where the database object is located.
    */
   schema: string;
   /**
-   * Table to delete.
+   * Database object to delete.
    */
   table: string;
+  /**
+   * Type of the database object to delete.
+   */
+  type: 'BASE TABLE';
 }
 
-export interface DeleteTableMigration
+export interface DeleteDatabaseObjectMigrationOptions
   extends Omit<MutationOrQueryBaseOptions, 'schema' | 'table'> {}
 
-export default async function deleteTable({
+export default async function deleteDatabaseObject({
   dataSource,
   adminSecret,
   schema,
   table,
-}: DeleteTableMigration & DeleteTableMigrationVariables) {
+  type,
+}: DeleteDatabaseObjectMigrationOptions &
+  DeleteDatabaseObjectMigrationVariables) {
   const deleteTableArgs = [
     getPreparedHasuraQuery(
       dataSource,
-      'DROP TABLE IF EXISTS %I.%I',
+      `DROP ${typeToQuery[type]} IF EXISTS %I.%I`,
       schema,
       table,
     ),
