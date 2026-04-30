@@ -3119,7 +3119,7 @@ User authentication session containing tokens and user information
 
 ### Extended by
 
-- [`Session`](./session#session)
+- [`StoredSession`](./index#storedsession)
 
 ### Properties
 
